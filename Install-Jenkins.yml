@@ -1,0 +1,91 @@
+---
+- hosts: all
+  gather_facts: no
+  become: yes
+  become_method: sudo
+  vars:
+    sudoers:
+      - jenkinsadmin
+
+  tasks:
+    - name: Add user "jenkinsadmin" to the server
+      user:
+        name: jenkinsadmin
+        comment: Privileged User
+        state: present
+      tags:
+        - usercreation
+
+    - name: Make sure we have a 'wheel' group
+      group:
+        name: wheel
+        state: present
+      tags:
+        - wheelgroup
+#wheel group will be added to the target system at cd /etc/group
+
+    - name: Allow 'wheel' group to have passwordless sudo
+      lineinfile:
+        dest: /etc/sudoers
+        state: present
+        regexp: '^%wheel'
+        line: '%wheel ALL=(ALL) NOPASSWD: ALL'
+        validate: visudo -cf %s
+      tags:
+        - passwordless
+
+    - name: Add sudoers users to wheel group
+      user:
+        name: "{{ item }}"
+        groups: wheel
+        append: yes
+      with_items: "{{ sudoers }}"
+      tags:
+        - addusertowheel
+        
+    - name: Install Java 8 using YUM
+      yum:
+        name: java-1.8.0-openjdk
+        state: present
+      become: true
+      tags:
+        - installjava
+        
+    - name: Download Jenkins repo yum URL for Redhat
+      get_url:
+        url: https://pkg.jenkins.io/redhat/jenkins.repo
+        dest: /etc/yum.repos.d/jenkins.repo
+      become: true
+      tags:
+        - jenkinsurl
+        
+    - name: Import GPG Key
+      rpm_key:
+      state: present
+      key: https://pkg.jenkins.io/redhat/jenkins.io.key
+      tags:
+        - gpgkey
+        
+    - name: Install Jenkins
+      yum:
+        name: jenkins
+        state: present
+      tags:
+        - installjenkins
+        
+    - name: Change Jenkins JAVA options
+      lineinfile: 
+        dest: /etc/sysconfig/jenkins
+        regexp: '^JENKINS_JAVA_OPTIONS='
+        line: 'JENKINS_JAVA_OPTIONS="-Djava.awt.headless=true -Djenkins.install.runSetupWizard=false"'
+      become: true
+      tags:
+        - javaoptions
+
+    - name: Start Jenkins service and enable on boot
+      service:
+        name: jenkins
+        state: started
+        enabled: yes
+      tags:
+        - startjenkins      

@@ -1,0 +1,14 @@
+---
+- hosts: all
+  gather_facts: no
+  become: yes
+  become_method: sudo
+
+  tasks:
+    - name: Add user "jenkinsadmin" to the server
+      user:
+        name: jenkinsadmin
+        comment: Privileged User
+        state: present
+      tags:
+        - usercreation
